@@ -4,13 +4,13 @@ class PlayerInfo extends GameObject {
 }
 class PuzzlePiece extends GameObject {
 	static SIZE = 40;
-	static SHAPE_DIAMOND = 'diamond';
-	static SHAPE_CIRCLE = 'circle';
+	static SHAPE_DIAMOND = "diamond";
+	static SHAPE_CIRCLE = "circle";
 	static COLORS = [
-		'red',
-		'green',
-		'yellow',
-		'blue'
+		"red",
+		"green",
+		"yellow",
+		"blue"
 	];
 	color;
 	shape;
@@ -54,8 +54,8 @@ class PuzzleGrid extends GameObject {
 		for(let i = 0; i < this.columns; i++){
 			this.positions[i] = new Array(this.rows);
 		}
-		this.positions[0][14] = {color: 'red'};
-		this.positions[1][14] = {color: 'yellow'};
+		this.positions[0][14] = {color: "red"};
+		this.positions[1][14] = {color: "yellow"};
 	}
 	/**
 	 * 
@@ -138,7 +138,7 @@ class PuzzleGrid extends GameObject {
 					rows[i] = {};
 				}
 			}
-		})
+		});
 	}
 
 	clearChain(x, y, color, direction = {x: 0, y: 0}) {
