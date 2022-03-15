@@ -6,6 +6,12 @@ class PuzzlePiece extends GameObject {
 	static SIZE = 40;
 	static SHAPE_DIAMOND = 'diamond';
 	static SHAPE_CIRCLE = 'circle';
+	static COLORS = [
+		'red',
+		'green',
+		'yellow',
+		'blue'
+	];
 	color;
 	shape;
 
@@ -117,11 +123,22 @@ class PuzzleGrid extends GameObject {
 					this.positions[col][row] = {};
 				}
 			}
-		})
+		});
+		this.collapseDown();
 	}
 
 	collapseDown() {
-		
+		this.positions.forEach((rows, col) => {
+			let drop = 0;
+			for(let i = rows.length-1; i>-1; i--) {
+				if(!rows[i] || !rows[i].color) {
+					drop++;
+				} else if(drop) {
+					rows[i+drop] = rows[i];
+					rows[i] = {};
+				}
+			}
+		})
 	}
 
 	clearChain(x, y, color, direction = {x: 0, y: 0}) {
@@ -154,6 +171,10 @@ export class PuzzleFighterGameEngine extends GameEngine {
 	clearPieceChance = 0;
 	/** @type {PuzzlePiece|undefined} */
 	player;
+	/** @type {PuzzlePiece|undefined} */
+	playerPiece2;
+	/** @type {Point} */
+	playerPiece2Offset;
 	/** @type {PuzzleGrid} */
 	puzzleGrid;
 
@@ -174,20 +195,22 @@ export class PuzzleFighterGameEngine extends GameEngine {
 	createPlayerPuzzlePiece() {
 		if(this.player) {
 			this.removeGameObject(this.player);
+			this.removeGameObject(this.playerPiece2);
 		}
 		this.ballX = 0;
 		this.ballY = 0;
 		this.player = new PuzzlePiece();
 		this.player.shape = Math.random() < 0.1 ? PuzzlePiece.SHAPE_DIAMOND : PuzzlePiece.SHAPE_CIRCLE;
 		this.clearPieceChance = this.player.shape == PuzzlePiece.SHAPE_DIAMOND ? 0 : this.clearPieceChance + .1;
-		const colors = [
-			'red',
-			'green',
-			'yellow',
-			'blue'
-		];
-		this.player.color = colors[parseInt(Math.min(3, Math.random()*4))];
+		this.player.color = PuzzlePiece.COLORS[parseInt(Math.min(3, Math.random()*4))];
 		this.addGameObject(this.player);
+
+		this.playerPiece2 = new PuzzlePiece();
+		this.playerPiece2.shape = Math.random() < 0.1 ? PuzzlePiece.SHAPE_DIAMOND : PuzzlePiece.SHAPE_CIRCLE;
+		this.clearPieceChance = this.playerPiece2.shape == PuzzlePiece.SHAPE_DIAMOND ? 0 : this.clearPieceChance + .1;
+		this.playerPiece2.color = PuzzlePiece.COLORS[parseInt(Math.min(3, Math.random()*4))];
+		this.addGameObject(this.playerPiece2);
+		this.playerPiece2Offset = new Point({x:0, y:-1});
 	}
 
 	update() {
@@ -195,34 +218,56 @@ export class PuzzleFighterGameEngine extends GameEngine {
 		this.diffTime = this.currentTime - this.lastUpdateTime;
 		this.gameObjects.forEach(go => go.update());
 		if(!this.moving) {
-			if(this.buttons.arrowRight.pressed && this.puzzleGrid.canClaim(this.ballX + 1, this.ballY)) {
-				this.ballX = Math.min(this.ballX+1, this.puzzleGrid.columns-1);
+			if(this.buttons.arrowRight.pressed && this.puzzleGrid.canClaim(this.ballX + 1 + this.playerPiece2Offset.x, this.ballY)) {
+				this.ballX++;
 			}
-			if(this.buttons.arrowLeft.pressed && this.puzzleGrid.canClaim(this.ballX - 1, this.ballY)) {
-				this.ballX = Math.max(this.ballX-1, 0);
+			if(this.buttons.arrowLeft.pressed && this.puzzleGrid.canClaim(this.ballX - 1 + this.playerPiece2Offset.x, this.ballY)) {
+				this.ballX--;
 			}
 		}
 		this.moving = this.buttons.arrowRight.pressed || this.buttons.arrowLeft.pressed;
+
+		if(!this.rotating && this.buttons.space.pressed) {
+			const newX = this.playerPiece2Offset.y;
+			this.playerPiece2Offset.y = -this.playerPiece2Offset.x;
+			this.playerPiece2Offset.x = newX;
+		}
+		this.rotating = this.buttons.space.pressed;
+
+		//correct x positioning
+		this.ballX = Math.min(this.ballX+1, this.puzzleGrid.columns-1);
+		this.ballX = Math.max(this.ballX-1, 0);
+
+
 		let drop =false;
 		if(this.dropSpeed + this.lastDrop < this.currentTime || this.buttons.arrowDown.pressed) {
 			drop = true;
 		}
 		if(drop) {
 			// check collision
-			if(!this.puzzleGrid.canClaim(this.ballX, this.ballY + 1)) {
+			if(
+				this.puzzleGrid.canClaim(this.ballX, this.ballY + 1)
+				&& this.puzzleGrid.canClaim(this.ballX + this.playerPiece2Offset.x, this.ballY + 1 + this.playerPiece2Offset.y)
+			) {
+				this.ballY++;
+				this.lastDrop = this.currentTime;
+			} else {
 				this.puzzleGrid.setPositionDetails(this.ballX, this.ballY, {
 					color: this.player.color,
 					shape: this.player.shape
 				});
+				this.puzzleGrid.setPositionDetails(this.ballX + this.playerPiece2Offset.x, this.ballY + this.playerPiece2Offset.y, {
+					color: this.playerPiece2.color,
+					shape: this.playerPiece2.shape
+				});
 				this.puzzleGrid.checkAndClear();
 				this.createPlayerPuzzlePiece();
-			} else {
-				this.ballY++;
-				this.lastDrop = this.currentTime;
 			}
 		}
 		this.player.position.x = (this.ballX * (PuzzlePiece.SIZE + 2)) + this.puzzleGrid.position.x;
 		this.player.position.y = (this.ballY * (PuzzlePiece.SIZE + 2)) + this.puzzleGrid.position.y;
+		this.playerPiece2.position.x = ((this.ballX + this.playerPiece2Offset.x) * (PuzzlePiece.SIZE + 2)) + this.puzzleGrid.position.x;
+		this.playerPiece2.position.y = ((this.ballY + this.playerPiece2Offset.y) * (PuzzlePiece.SIZE + 2)) + this.puzzleGrid.position.y;
 		this.lastUpdateTime = this.currentTime;
 	}
 }
